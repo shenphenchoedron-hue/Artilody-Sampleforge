@@ -10,6 +10,17 @@ namespace palette {
 const Colour bg(0xff180e21), panel(0xff281329), wine(0xff43192e),
     line(0xff784455), gold(0xfff4c666), text(0xffffedda), muted(0xffc6adc0);
 }
+// Georgia is standard on macOS and Windows but usually absent on Linux.
+// JUCE 8.0.4 can crash while laying out text in a typeface that does not
+// exist, so pick an installed serif and fall back to the default UI font.
+static String titleTypeface() {
+  const auto installed = Font::findAllTypefaceNames();
+  for (auto name : {"Georgia", "DejaVu Serif", "Liberation Serif", "Noto Serif",
+                    "FreeSerif"})
+    if (installed.contains(name, true))
+      return name;
+  return Font::getDefaultSansSerifFontName();
+}
 class ForgeLook final : public LookAndFeel_V4 {
 public:
   ForgeLook() {
@@ -848,7 +859,7 @@ public:
     inspectorViewport.setScrollBarsShown(true, false);
     list.setRowHeight(31);
     label(title, "Artilody Sampleforge", 30);
-    title.setFont(Font(FontOptions("Georgia", 30.f, Font::plain)));
+    title.setFont(Font(FontOptions(titleTypeface(), 30.f, Font::plain)));
     title.setColour(Label::textColourId, palette::text);
     label(subtitle, "TURN RECORDINGS INTO INSTRUMENTS", 10);
     label(fileName, "Your next instrument starts here", 17);

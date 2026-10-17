@@ -124,7 +124,13 @@ jobs:
               DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/*.deb >/dev/null
               test -x /usr/bin/artilody-sampleforge
               ldd /opt/artilody-sampleforge/artilody-sampleforge | (! grep "not found")
-              echo "OK on '"$image"'"
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb xauth >/dev/null
+              set +e
+              timeout 8 xvfb-run -a artilody-sampleforge
+              code=$?
+              set -e
+              [ "$code" -eq 124 ] || { echo "GUI exited with code $code on '"$image"'"; exit 1; }
+              echo "OK on '"$image"': installed and GUI kept running"
             '
           done
       - uses: actions/upload-artifact@v4

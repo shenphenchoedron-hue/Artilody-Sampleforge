@@ -44,6 +44,14 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Launch test
+        shell: pwsh
+        run: |
+          $p = Start-Process "build\Sampleforge_artefacts\Release\Artilody Sampleforge.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { Write-Error "Application exited with code $($p.ExitCode)"; exit 1 }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "GUI started and kept running"
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -87,6 +95,13 @@ jobs:
         run: cmake --build build --parallel 4
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Launch test (virtual X display)
+        run: |
+          sudo apt-get install -y xvfb
+          set +e
+          timeout 8 xvfb-run -a "build/Sampleforge_artefacts/Release/Artilody Sampleforge"
+          code=$?
+          [ "$code" -eq 124 ] && echo "GUI started and kept running" || { echo "exit code $code"; exit 1; }
       - name: Package .deb and tarball
         run: |
           version="$(sed -n 's/^project(ArtilodySampleforge VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"

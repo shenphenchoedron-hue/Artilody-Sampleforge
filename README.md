@@ -57,7 +57,7 @@ The manuals are also included in every installer and attached to each release.
 
 ## Quick start
 
-1. Record notes one by one, ascending chromatically, with a short gap between them (WAV, AIFF or FLAC; up to about 6 minutes stereo).
+1. Record your instruments' notes one by one into one sound file, ascending chromatically, with a short gap between them (WAV, AIFF or FLAC; up to about 6 minutes stereo).
 2. **Import audio** - Sampleforge splits and analyses the recording.
 3. Adjust **Floor dB** / **Spacing s** and click **Re-analyse** if notes are missed or over-detected. Fix the octave with **First note** or **Align range to this pitch**.
 4. Select samples, listen with **Play** and **Corrected preview**, then **Apply tuning** or **Tune reliable samples**.

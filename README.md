@@ -30,6 +30,7 @@ Record an instrument playing one note at a time in ascending chromatic order, lo
 - **88-key overview** - fixed A0-C8 keyboard showing imported, selected and missing notes.
 - **Open export format** - standard SFZ 1.0 + 24-bit PCM WAV, as a folder or ZIP. Works in sforzando, Sfizz, Decent Sampler and many DAW samplers.
 - **Native and offline** - C++20 / JUCE, no browser engine, no network access needed.
+- - **Works with Artilody Plugweaver** - making and correcting chromatic scale instrument recordings ready to be used in Artilody Plugweaver.
 
 ## Download
 

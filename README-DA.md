@@ -24,6 +24,7 @@ Optag et instrument, der spiller én tone ad gangen i stigende kromatisk rækkef
 - **Oversigt over 88 tangenter** - fast A0-C8-klaviatur med importerede, valgte og manglende toner.
 - **Åbent eksportformat** - standard SFZ 1.0 + 24-bit PCM WAV som mappe eller ZIP. Virker i sforzando, Sfizz, Decent Sampler og mange DAW-samplere.
 - **Native og offline** - C++20 / JUCE, ingen browsermotor, ingen netværksadgang nødvendig.
+- **Virker sammen med [Artilody Plugweaver](https://github.com/shenphenchoedron-hue/Artilody-Plugweaver)** - lav og ret kromatiske instrumentoptagelser, så de er klar til brug i Artilody Plugweaver til at lave VST3-, AU- og CLAP-plugins.
 
 ## Download
 

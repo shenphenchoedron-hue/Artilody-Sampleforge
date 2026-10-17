@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Artilody Sampleforge
+GenericName=Sample Editor
+GenericName[da]=Sampleeditor
+Comment=Split chromatic recordings into tuned samples and export SFZ instruments
+Comment[da]=Opdel kromatiske optagelser i stemte samples og eksportér SFZ-instrumenter
+Exec=artilody-sampleforge
+Icon=artilody-sampleforge
+Terminal=false
+Categories=AudioVideo;Audio;Music;
+Keywords=sampler;sfz;tuning;samples;audio;
+StartupWMClass=Artilody Sampleforge

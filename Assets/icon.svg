@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs>
+ <linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#682e93"/><stop offset=".45" stop-color="#351b58"/><stop offset="1" stop-color="#151d38"/></linearGradient>
+ <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff6bb"/><stop offset=".32" stop-color="#ffe59a"/><stop offset=".65" stop-color="#edb643"/><stop offset="1" stop-color="#bb6a26"/></linearGradient>
+ <linearGradient id="ruby" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#be386e"/><stop offset=".5" stop-color="#f36b87"/><stop offset="1" stop-color="#8440b5"/></linearGradient>
+ <linearGradient id="teal" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#177b8e"/><stop offset=".5" stop-color="#42d7ce"/><stop offset="1" stop-color="#b4f1d9"/></linearGradient>
+ <linearGradient id="violet"><stop stop-color="#6338b8"/><stop offset="1" stop-color="#c779ef"/></linearGradient>
+</defs>
+<rect x="5" y="5" width="246" height="246" rx="55" fill="url(#b)" stroke="#bf83be" stroke-width="3"/>
+<path d="M39 193C9 120 40 51 97 43 45 68 45 120 67 153c18 28 42 46 38 72-32 7-57-9-66-32Z" fill="url(#ruby)"/>
+<path d="M170 28c55 6 73 50 55 89-12 27-44 30-59 8 36 11 48-17 37-39-7-16-25-24-33-58Z" fill="url(#teal)"/>
+<path d="M39 177c11 55 63 70 106 49 41-20 59-21 79-10-23 27-91 28-125 19-33-8-49-26-60-58Z" fill="url(#violet)"/>
+<path d="M190 41C108 0 43 65 102 115c39 33 80 45 51 79-17 21-61 23-79-5 7 49 87 58 116 14 33-50-29-83-65-113-29-24-8-57 26-58 17 0 29 3 39 9Z" fill="url(#g)" stroke="#ffe8a1" stroke-width="1.2"/>
+<path d="M61 216C-4 153 45 89 87 118s-8 65-31 38 1-49 24-43" fill="none" stroke="url(#g)" stroke-width="4" stroke-linecap="round"/>
+<path d="M198 53c48 41 22 84-11 60" fill="none" stroke="#ffe7a0" stroke-width="3" stroke-linecap="round"/>
+</svg>

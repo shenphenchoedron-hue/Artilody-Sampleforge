@@ -1,0 +1,143 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (universal arm64 + x86_64)
+        run: >
+          cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+          -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package DMG
+        run: |
+          app="build/Sampleforge_artefacts/Release/Artilody Sampleforge.app"
+          codesign --force --deep --sign - "$app"
+          bash packaging/macos/make-dmg.sh "$app" "$(sed -n 's/^project(ArtilodySampleforge VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Package installer and portable ZIP
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(ArtilodySampleforge VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          $build = Join-Path $PWD "build"
+          Get-ChildItem -Recurse -Filter icon.ico $build | Select-Object -ExpandProperty FullName
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DBuildDir=$build" packaging\windows\installer.iss
+          if ($LASTEXITCODE) { exit 1 }
+          $portable = "dist\portable\Artilody Sampleforge"
+          New-Item -ItemType Directory -Force $portable | Out-Null
+          Copy-Item "build\Sampleforge_artefacts\Release\Artilody Sampleforge.exe" $portable
+          Copy-Item LICENSE "$portable\LICENSE.txt"
+          Copy-Item JUCE-LICENSE.md, INSTRUMENT-FORMAT.md $portable
+          Copy-Item docs\*.pdf $portable
+          Compress-Archive -Path $portable -DestinationPath "dist\Artilody-Sampleforge-$version-Windows-x64-Portable.zip"
+          Remove-Item -Recurse dist\portable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+
+  linux:
+    # Built on Ubuntu 22.04 (glibc 2.35): runs on Ubuntu 22.04+ and Debian 12+.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config dpkg-dev \
+            libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev \
+            libxrandr-dev libxrender-dev libgl1-mesa-dev
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel 4
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Package .deb and tarball
+        run: |
+          version="$(sed -n 's/^project(ArtilodySampleforge VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+          bin="build/Sampleforge_artefacts/Release/Artilody Sampleforge"
+          strip "$bin"
+          bash packaging/linux/make-deb.sh "$bin" "$version" dist
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb
+          tdir="artilody-sampleforge-$version-linux-x86_64"
+          mkdir -p "/tmp/$tdir"
+          cp "$bin" "/tmp/$tdir/artilody-sampleforge"
+          cp LICENSE JUCE-LICENSE.md INSTRUMENT-FORMAT.md docs/*.pdf Assets/icon.png "/tmp/$tdir/"
+          tar -C /tmp -czf "dist/$tdir.tar.gz" "$tdir"
+      - name: Smoke test install on Debian 12 and Ubuntu 24.04
+        run: |
+          for image in debian:12 ubuntu:24.04; do
+            docker run --rm -v "$PWD/dist:/dist" "$image" bash -c '
+              set -e
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/*.deb >/dev/null
+              test -x /usr/bin/artilody-sampleforge
+              ldd /opt/artilody-sampleforge/artilody-sampleforge | (! grep "not found")
+              echo "OK on '"$image"'"
+            '
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp docs/*.pdf artifacts/
+          (cd artifacts && sha256sum * > SHA256SUMS.txt)
+          ls -la artifacts
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/* \
+              --title "Artilody Sampleforge ${GITHUB_REF_NAME#v}" \
+              --notes-file docs/RELEASE-NOTES.md
+          fi

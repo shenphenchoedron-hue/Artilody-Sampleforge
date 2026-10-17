@@ -1,0 +1,17 @@
+# Build output
+build/
+build-*/
+.tools/
+dist/
+out/
+
+# Generated sample exports
+Sampleforge-*/
+test/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

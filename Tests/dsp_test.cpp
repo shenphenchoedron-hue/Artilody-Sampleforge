@@ -44,16 +44,27 @@ int main(int argc, char **argv) {
   instrument.first = first;
   instrument.samples = s;
   const auto sfz = forge::sfzInstrument(instrument);
+  // Template structure: control, global, group, then the regions.
+  const auto control = sfz.find("<control>\n"), path = sfz.find("default_path=\n"),
+             global = sfz.find("<global>\n"), group = sfz.find("<group>\n"),
+             loop = sfz.find("loop_mode=no_loop\n"), region = sfz.find("<region>");
+  assert(control != std::string::npos && control < path && path < global &&
+         global < group && group < loop && loop < region);
+  assert(std::count(sfz.begin(), sfz.end(), '<') - 3 == 71);
   assert(sfz.find("<region> lokey=24 hikey=24 pitch_keycenter=24 "
-                  "loop_mode=no_loop sample=001_C1.wav") != std::string::npos);
+                  "sample=001_C1.wav\n") != std::string::npos);
   assert(sfz.find("<region> lokey=36 hikey=36 pitch_keycenter=36 "
-                  "loop_mode=no_loop sample=012_C2.wav") != std::string::npos);
+                  "sample=012_C2.wav\n") != std::string::npos);
+  // Only opcodes that Artilody Plugweaver's importer accepts.
+  for (auto opcode : {"trigger=", "cutoff=", "fil_type=", "resonance=",
+                      "ampeg_", "tune=", "transpose="})
+    assert(sfz.find(opcode) == std::string::npos);
   assert(sfz.find("lokey=35 ") == std::string::npos);
   assert(sfz.find("tune=") == std::string::npos);
   assert(forge::sampleFilename(1, 25) == "002_Csharp1.wav");
   assert(forge::sampleFilename(0, 0) == "001_C-1.wav");
   assert(forge::sampleFilename(127, 127) == "128_G9.wav");
-  assert(std::count(sfz.begin(), sfz.end(), '<') == 71);
+
   instrument.samples[0].offset = -25;
   bool rejected = false;
   try {
@@ -62,6 +73,82 @@ int main(int argc, char **argv) {
     rejected = true;
   }
   assert(rejected);
+  {
+    // parallelFor visits every index once and rethrows a worker's exception
+    // (used for cancellation).
+    std::vector<std::atomic<int>> seen(500);
+    forge::parallelFor(500, [&](int i) { ++seen[size_t(i)]; });
+    assert(std::all_of(seen.begin(), seen.end(),
+                       [](auto &v) { return v == 1; }));
+    bool thrown = false;
+    try {
+      forge::parallelFor(500, [](int i) {
+        if (i == 123)
+          throw std::runtime_error("Cancelled");
+      });
+    } catch (const std::runtime_error &) {
+      thrown = true;
+    }
+    assert(thrown);
+  }
+  {
+    // A series of files, one note per file, ordered by lead pitch and
+    // combined. Mono files are upmixed next to a stereo file; the quiet file
+    // is still detected because each file is analysed at its own level.
+    std::vector<int> midi = {64, 60, 62, 61, 63};
+    std::vector<std::vector<std::vector<float>>> files;
+    for (int m : midi) {
+      auto x = tone(forge::frequency(m), .8);
+      if (m == 62)
+        for (auto &v : x)
+          v *= .01f;
+      if (m == 61)
+        files.push_back({x, x});
+      else
+        files.push_back({x});
+    }
+    // One uncertain pitch keeps the given (filename) order.
+    std::vector<forge::Pitch> lead(5, forge::Pitch{440, .95});
+    lead[2].confidence = .5;
+    std::vector<std::size_t> kept;
+    assert(!forge::seriesOrder(lead, kept));
+    assert((kept == std::vector<std::size_t>{0, 1, 2, 3, 4}));
+    // The same series appended in pitch order and analysed in one go, as
+    // a reference for buildSeries.
+    forge::Recording reference;
+    reference.rate = 44100;
+    for (auto i : {1, 3, 2, 4, 0})
+      forge::appendSegment(reference, files[size_t(i)], 2);
+    forge::analyse(reference, -42, .18, 440);
+    forge::Recording series;
+    series.rate = 44100;
+    bool byPitch = false;
+    auto order = forge::buildSeries(series, files, -42, .18, 440, byPitch);
+    assert(byPitch && (order == std::vector<std::size_t>{1, 3, 2, 4, 0}));
+    assert(series.channels.size() == 2 && series.segments.size() == 5 &&
+           series.channels[0].size() == size_t(5 * 35280));
+    assert(series.channels == reference.channels &&
+           series.segments == reference.segments &&
+           series.analysisChannel == reference.analysisChannel &&
+           series.first == reference.first);
+    for (std::size_t i = 0; i < 5; ++i) {
+      auto &a = series.samples[i], &b = reference.samples[i];
+      assert(a.start == b.start && a.end == b.end && a.offset == b.offset &&
+             a.pitch.hz == b.pitch.hz);
+    }
+    assert(series.samples.size() == 5 && series.first == 60);
+    for (int i = 0; i < 5; ++i) {
+      auto &q = series.samples[static_cast<std::size_t>(i)];
+      assert(q.offset == i && q.start >= series.segments[size_t(i)] &&
+             q.end <= series.segments[size_t(i)] + 35280);
+      assert(std::abs(forge::cents(q.pitch.hz, forge::frequency(60 + i))) <
+             25);
+    }
+    // Re-analysis of a copy keeps the file boundaries.
+    forge::Recording again = series;
+    forge::analyse(again, -42, .18, 440);
+    assert(again.samples.size() == 5);
+  }
   if (argc > 1) {
     std::ifstream f(argv[1], std::ios::binary | std::ios::ate);
     if (!f)

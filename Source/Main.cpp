@@ -382,56 +382,151 @@ class MainComponent final : public AudioAppComponent, private ListBoxModel {
     if (busy)
       return;
     chooser = std::make_unique<FileChooser>(
-        "Import a chromatic recording", File{},
+        "Import a chromatic recording or a series of note files", File{},
         "*.wav;*.aiff;*.aif;*.flac;*.mp3;*.m4a;*.ogg");
     Component::SafePointer<MainComponent> safe(this);
     chooser->launchAsync(FileBrowserComponent::openMode |
-                             FileBrowserComponent::canSelectFiles,
+                             FileBrowserComponent::canSelectFiles |
+                             FileBrowserComponent::canSelectMultipleItems,
                          [safe](const FileChooser &fc) {
-                           if (safe && fc.getResult().existsAsFile())
-                             safe->load(fc.getResult());
+                           Array<File> files;
+                           for (auto f : fc.getResults())
+                             if (f.existsAsFile())
+                               files.add(f);
+                           if (safe && !files.isEmpty())
+                             safe->load(files);
                          });
   }
-  void load(File file) {
+  // Decodes one file. 'budget' is the remaining decoded size in bytes shared
+  // by all files of one import (which may be decoded concurrently).
+  static std::vector<std::vector<float>>
+  decode(AudioFormatManager &formats, const File &file, double &rate,
+         std::atomic<int64> &budget) {
+    std::unique_ptr<AudioFormatReader> reader(formats.createReaderFor(file));
+    if (!reader)
+      throw std::runtime_error(
+          ("Cannot decode " + file.getFileName() +
+           ". Try WAV, AIFF or FLAC.")
+              .toStdString());
+    if (reader->lengthInSamples <= 0 || reader->numChannels < 1 ||
+        reader->numChannels > 2)
+      throw std::runtime_error(
+          (file.getFileName() + ": use mono or stereo audio.").toStdString());
+    // Divide instead of multiplying: the length comes from the file header
+    // and must not overflow the size check.
+    const int64 frameBytes = int64(reader->numChannels) * 4;
+    const int64 limit = 128 * 1024 * 1024;
+    if (reader->lengthInSamples > limit / frameBytes ||
+        budget.fetch_sub(reader->lengthInSamples * frameBytes) -
+                reader->lengthInSamples * frameBytes <
+            0)
+      throw std::runtime_error(
+          "Use mono/stereo audio up to 128 MB decoded size in total.");
+    int n = int(reader->lengthInSamples);
+    // Read straight into the returned channels (no intermediate copy).
+    std::vector<std::vector<float>> channels(
+        reader->numChannels, std::vector<float>(static_cast<std::size_t>(n)));
+    std::vector<float *> pointers;
+    for (auto &ch : channels)
+      pointers.push_back(ch.data());
+    AudioBuffer<float> buffer(pointers.data(), int(pointers.size()), n);
+    if (!reader->read(&buffer, 0, n, 0, true, true))
+      throw std::runtime_error(
+          ("Audio read failed: " + file.getFileName()).toStdString());
+    rate = reader->sampleRate;
+    return channels;
+  }
+  void load(Array<File> files) {
     double floor = threshold.getText().getDoubleValue(),
            spacing = gap.getText().getDoubleValue(), refHz = reference;
     if (floor < -70 || floor > -12 || spacing < .08 || spacing > 10) {
       message("Use floor -70 to -12 dB and spacing 0.08 to 10 seconds.");
       return;
     }
-    message("Reading audio and detecting notes...");
-    begin([this, file, floor, spacing, refHz] {
-      AudioFormatManager formats;
-      formats.registerBasicFormats();
-      std::unique_ptr<AudioFormatReader> reader(formats.createReaderFor(file));
-      if (!reader)
-        throw std::runtime_error(
-            "Cannot decode this audio file. Try WAV, AIFF or FLAC.");
-      if (reader->lengthInSamples <= 0 || reader->numChannels < 1 ||
-          reader->numChannels > 2 ||
-          reader->lengthInSamples * reader->numChannels * 4 > 128 * 1024 * 1024)
-        throw std::runtime_error(
-            "Use mono/stereo audio up to 128 MB decoded size.");
-      int n = int(reader->lengthInSamples);
-      AudioBuffer<float> buffer(int(reader->numChannels), n);
-      if (!reader->read(&buffer, 0, n, 0, true, true))
-        throw std::runtime_error("Audio read failed.");
-      auto r = std::make_shared<forge::Recording>();
-      r->rate = reader->sampleRate;
-      r->name = file.getFileName().toStdString();
-      for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        r->channels.emplace_back(buffer.getReadPointer(ch),
-                                 buffer.getReadPointer(ch) + n);
-      forge::analyse(*r, floor, spacing, refHz, [this](int, int) {
+    if (files.size() > 128) {
+      message("Select at most 128 files (one per key).");
+      return;
+    }
+    message(files.size() == 1
+                ? "Reading audio and detecting notes..."
+                : "Reading " + String(files.size()) +
+                      " files and detecting notes...");
+    begin([this, files, floor, spacing, refHz] {
+      // Called from worker threads; only reads the atomic flag.
+      auto cancelled = [this](int, int) {
         if (closing)
           throw std::runtime_error("Cancelled");
-      });
-      return [this, r] {
+      };
+      constexpr int64 limit = 128 * 1024 * 1024;
+      std::atomic<int64> budget{limit};
+      auto r = std::make_shared<forge::Recording>();
+      bool pitchOrder = false;
+      if (files.size() == 1) {
+        AudioFormatManager formats;
+        formats.registerBasicFormats();
+        r->channels = decode(formats, files[0], r->rate, budget);
+        r->name = files[0].getFileName().toStdString();
+        forge::analyse(*r, floor, spacing, refHz, cancelled);
+      } else {
+        // Natural filename order (Note 2 before Note 10) is the fallback
+        // order when a file's pitch is uncertain.
+        auto sorted = files;
+        std::stable_sort(sorted.begin(), sorted.end(),
+                         [](const File &a, const File &b) {
+                           return a.getFileName().compareNatural(
+                                      b.getFileName()) < 0;
+                         });
+        // Decode all files in parallel, each worker with its own readers.
+        std::vector<std::vector<std::vector<float>>> audio(
+            static_cast<std::size_t>(sorted.size()));
+        std::vector<double> rates(audio.size());
+        forge::parallelFor(sorted.size(), [&](int i) {
+          cancelled(0, 0);
+          AudioFormatManager formats;
+          formats.registerBasicFormats();
+          audio[static_cast<std::size_t>(i)] =
+              decode(formats, sorted[i], rates[static_cast<std::size_t>(i)],
+                     budget);
+        });
+        r->rate = rates[0];
+        for (std::size_t i = 1; i < rates.size(); ++i)
+          if (std::abs(rates[i] - r->rate) > .5)
+            throw std::runtime_error(
+                ("All files must use the same sample rate. " +
+                 sorted[int(i)].getFileName() + " is " + String(rates[i], 0) +
+                 " Hz, " + sorted[0].getFileName() + " is " +
+                 String(r->rate, 0) + " Hz.")
+                    .toStdString());
+        // Mono files are duplicated next to stereo files, so check the limit
+        // on the combined size.
+        int64 frames = 0;
+        std::size_t channelCount = 1;
+        for (auto &a : audio) {
+          frames += int64(a[0].size());
+          channelCount = std::max(channelCount, a.size());
+        }
+        if (frames * int64(channelCount) * 4 > limit ||
+            frames > std::numeric_limits<int>::max())
+          throw std::runtime_error(
+              "Use mono/stereo audio up to 128 MB decoded size in total.");
+        auto order = forge::buildSeries(*r, audio, floor, spacing, refHz,
+                                        pitchOrder, cancelled);
+        r->name = (String(sorted.size()) + " files: " +
+                   sorted[int(order.front())].getFileName() + " ... " +
+                   sorted[int(order.back())].getFileName())
+                      .toStdString();
+      }
+      int fileCount = files.size();
+      return [this, r, fileCount, pitchOrder] {
         recording = r;
         selected = 0;
         cursor = r->samples.empty() ? 0 : r->samples[0].start;
-        message(String(r->samples.size()) +
-                " samples found. Review boundaries and any missing notes.");
+        message(String(r->samples.size()) + " samples found" +
+                (fileCount > 1
+                     ? " in " + String(fileCount) + " files (ordered by " +
+                           (pitchOrder ? "pitch" : "filename") + ")"
+                     : String()) +
+                ". Review boundaries and any missing notes.");
       };
     });
   }
@@ -864,7 +959,9 @@ public:
     label(subtitle, "TURN RECORDINGS INTO INSTRUMENTS", 10);
     label(fileName, "Your next instrument starts here", 17);
     fileName.setColour(Label::textColourId, palette::text);
-    label(fileInfo, "Import WAV, AIFF or FLAC", 12);
+    label(fileInfo,
+          "Import one recording or a series of note files (WAV, AIFF or FLAC)",
+          12);
     label(count, "No recording loaded", 13);
     count.setJustificationType(Justification::centredRight);
     count.setColour(Label::textColourId, palette::gold);
@@ -1124,7 +1221,7 @@ class SampleforgeApplication final : public JUCEApplication {
 
 public:
   const String getApplicationName() override { return "Artilody Sampleforge"; }
-  const String getApplicationVersion() override { return "0.2.0"; }
+  const String getApplicationVersion() override { return "0.3.0"; }
   void initialise(const String &) override {
     window = std::make_unique<Window>();
   }

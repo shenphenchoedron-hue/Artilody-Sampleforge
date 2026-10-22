@@ -19,7 +19,7 @@
 
 ---
 
-Record an instrument playing one note at a time in ascending chromatic order, load the file into Sampleforge, and get a ready-to-play **SFZ 1.0** instrument with **24-bit WAV** samples.
+Record an instrument playing one note at a time in ascending chromatic order, load the file into Sampleforge, and get a ready-to-play **SFZ** instrument with **24-bit WAV** samples.
 
 ## Features
 
@@ -28,7 +28,7 @@ Record an instrument playing one note at a time in ascending chromatic order, lo
 - **Fine-tuning** - per-sample correction suggestions in cents, A4 reference 400-480 Hz, original/corrected A/B preview, one-click approval of all reliable samples.
 - **Editing** - trim boundaries, split at cursor, merge with next sample.
 - **88-key overview** - fixed A0-C8 keyboard showing imported, selected and missing notes.
-- **Open export format** - standard SFZ 1.0 + 24-bit PCM WAV, as a folder or ZIP. Works in sforzando, Sfizz, Decent Sampler and many DAW samplers.
+- **Open export format** - standard SFZ (v1 opcodes in the usual control/global/group/region layout) + 24-bit PCM WAV, as a folder or ZIP. Works in sforzando, Sfizz, Decent Sampler and many DAW samplers.
 - **Native and offline** - C++20 / JUCE, no browser engine, no network access needed.
 - **Works with [Artilody Plugweaver](https://github.com/shenphenchoedron-hue/Artilody-Plugweaver)** - making and correcting chromatic scale instrument recordings ready to be used in Artilody Plugweaver to make VST3, AU and CLAP plugins.
 
@@ -58,7 +58,7 @@ The manuals are also included in every installer and attached to each release.
 ## Quick start
 
 1. Record your instruments' notes one by one into one sound file, ascending chromatically, with a short gap between them (WAV, AIFF or FLAC; up to about 6 minutes stereo).
-2. **Import audio** - Sampleforge splits and analyses the recording.
+2. **Import audio** - Sampleforge splits and analyses the recording. You can also select a series of files at once (for example one file per note): they are combined in ascending pitch order (or filename order if a pitch is uncertain), and notes are detected inside each file. All files must have the same sample rate.
 3. Adjust **Floor dB** / **Spacing s** and click **Re-analyse** if notes are missed or over-detected. Fix the octave with **First note** or **Align range to this pitch**.
 4. Select samples, listen with **Play** and **Corrected preview**, then **Apply tuning** or **Tune reliable samples**.
 5. **Export... > SFZ + WAV folder** (or ZIP) and load `Instrument.sfz` in your SFZ sampler.

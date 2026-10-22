@@ -13,7 +13,7 @@
 
 ---
 
-Optag et instrument, der spiller én tone ad gangen i stigende kromatisk rækkefølge, indlæs filen i Sampleforge, og få et færdigt **SFZ 1.0**-instrument med **24-bit WAV**-samples.
+Optag et instrument, der spiller én tone ad gangen i stigende kromatisk rækkefølge, indlæs filen i Sampleforge, og få et færdigt **SFZ**-instrument med **24-bit WAV**-samples.
 
 ## Funktioner
 
@@ -22,7 +22,7 @@ Optag et instrument, der spiller én tone ad gangen i stigende kromatisk rækkef
 - **Finstemning** - forslag til korrektion i cent pr. sample, A4 fra 400-480 Hz, aflytning af original/korrigeret, godkend alle pålidelige samples med ét klik.
 - **Redigering** - trim grænser, del ved markøren, læg sammen med næste sample.
 - **Oversigt over 88 tangenter** - fast A0-C8-klaviatur med importerede, valgte og manglende toner.
-- **Åbent eksportformat** - standard SFZ 1.0 + 24-bit PCM WAV som mappe eller ZIP. Virker i sforzando, Sfizz, Decent Sampler og mange DAW-samplere.
+- **Åbent eksportformat** - standard SFZ (v1-opcodes i det almindelige control/global/group/region-layout) + 24-bit PCM WAV som mappe eller ZIP. Virker i sforzando, Sfizz, Decent Sampler og mange DAW-samplere.
 - **Native og offline** - C++20 / JUCE, ingen browsermotor, ingen netværksadgang nødvendig.
 - **Virker sammen med [Artilody Plugweaver](https://github.com/shenphenchoedron-hue/Artilody-Plugweaver)** - lav og ret kromatiske instrumentoptagelser, så de er klar til brug i Artilody Plugweaver til at lave VST3-, AU- og CLAP-plugins.
 
@@ -52,7 +52,7 @@ Manualerne følger også med i alle installationspakker og ligger ved hver relea
 ## Kom i gang
 
 1. Optag tonerne én efter én, stigende kromatisk, med en kort pause imellem (WAV, AIFF eller FLAC; op til ca. 6 minutter stereo).
-2. **Import audio** - Sampleforge deler og analyserer optagelsen.
+2. **Import audio** - Sampleforge deler og analyserer optagelsen. Du kan også vælge en serie filer på én gang (fx én fil pr. tone): de samles i stigende tonehøjde (eller filnavnsrækkefølge, hvis en tonehøjde er usikker), og toner findes inden for hver fil. Alle filer skal have samme samplerate.
 3. Justér **Floor dB** / **Spacing s**, og klik **Re-analyse**, hvis toner overses eller findes for mange. Ret oktaven med **First note** eller **Align range to this pitch**.
 4. Vælg samples, lyt med **Play** og **Corrected preview**, og klik **Apply tuning** eller **Tune reliable samples**.
 5. **Export... > SFZ + WAV folder** (eller ZIP), og indlæs `Instrument.sfz` i din SFZ-sampler.

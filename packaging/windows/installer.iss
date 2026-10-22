@@ -1,8 +1,8 @@
 ; Inno Setup 6 script for Artilody Sampleforge.
-; Compile: ISCC.exe /DAppVersion=0.2.0 /DBuildDir=<cmake build dir> packaging\windows\installer.iss
+; Compile: ISCC.exe /DAppVersion=0.3.0 /DBuildDir=<cmake build dir> packaging\windows\installer.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.3.0"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\..\build-windows"

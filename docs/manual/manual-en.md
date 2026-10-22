@@ -1,4 +1,4 @@
-% version: 0.2.0
+% version: 0.3.0
 % date: October 2026
 % tagline: Turn chromatic recordings into tuned SFZ instruments
 
@@ -11,7 +11,7 @@ Artilody Sampleforge turns a single recording of an instrument into a playable s
 - shows missing notes as gaps on an 88-key keyboard,
 - suggests a fine-tuning correction for every sample, which you can audition and approve,
 - lets you correct boundaries manually (trim, split, merge),
-- exports a standard **SFZ 1.0** instrument with **24-bit WAV** samples that works in any SFZ-capable sampler.
+- exports a standard **SFZ** instrument with **24-bit WAV** samples that works in any SFZ-capable sampler.
 
 Sampleforge is a standalone application, not a plug-in. All processing happens locally on your computer; no network connection is needed after installation.
 
@@ -32,15 +32,15 @@ https://github.com/shenphenchoedron-hue/Artilody-Sampleforge/releases
 
 | File | System |
 |---|---|
-| `Artilody-Sampleforge-0.2.0-macOS.dmg` | macOS (Apple Silicon and Intel) |
-| `Artilody-Sampleforge-0.2.0-Windows-x64-Setup.exe` | Windows installer |
-| `Artilody-Sampleforge-0.2.0-Windows-x64-Portable.zip` | Windows, no installation |
-| `artilody-sampleforge_0.2.0_amd64.deb` | Debian / Ubuntu package |
-| `artilody-sampleforge-0.2.0-linux-x86_64.tar.gz` | Other Linux, no installation |
+| `Artilody-Sampleforge-0.3.0-macOS.dmg` | macOS (Apple Silicon and Intel) |
+| `Artilody-Sampleforge-0.3.0-Windows-x64-Setup.exe` | Windows installer |
+| `Artilody-Sampleforge-0.3.0-Windows-x64-Portable.zip` | Windows, no installation |
+| `artilody-sampleforge_0.3.0_amd64.deb` | Debian / Ubuntu package |
+| `artilody-sampleforge-0.3.0-linux-x86_64.tar.gz` | Other Linux, no installation |
 
 ## macOS
 
-1. Double-click `Artilody-Sampleforge-0.2.0-macOS.dmg`.
+1. Double-click `Artilody-Sampleforge-0.3.0-macOS.dmg`.
 2. Drag **Artilody Sampleforge** onto the **Applications** folder in the window that opens.
 3. Eject the disk image and start the program from Applications or Launchpad.
 
@@ -54,14 +54,14 @@ xattr -dr com.apple.quarantine "/Applications/Artilody Sampleforge.app"
 
 ## Windows
 
-1. Double-click `Artilody-Sampleforge-0.2.0-Windows-x64-Setup.exe`.
+1. Double-click `Artilody-Sampleforge-0.3.0-Windows-x64-Setup.exe`.
 2. If Windows SmartScreen shows "Windows protected your PC", click **More info** and then **Run anyway**. The installer is not code-signed with a paid certificate.
 3. Choose language (English or Danish), accept the GPL licence and follow the wizard. You can choose whether to install for all users or only for yourself, and whether to create a desktop shortcut.
 4. Start **Artilody Sampleforge** from the Start menu. The manuals are also available in the Start menu folder.
 
 To uninstall, use **Settings > Apps > Installed apps** or the uninstall shortcut in the Start menu.
 
-**Portable version:** unpack `Artilody-Sampleforge-0.2.0-Windows-x64-Portable.zip` anywhere and run `Artilody Sampleforge.exe`. Nothing is written to the registry.
+**Portable version:** unpack `Artilody-Sampleforge-0.3.0-Windows-x64-Portable.zip` anywhere and run `Artilody Sampleforge.exe`. Nothing is written to the registry.
 
 ## Debian and Ubuntu Linux
 
@@ -69,7 +69,7 @@ Install the package with apt, which automatically installs the required librarie
 
 ```
 cd ~/Downloads
-sudo apt install ./artilody-sampleforge_0.2.0_amd64.deb
+sudo apt install ./artilody-sampleforge_0.3.0_amd64.deb
 ```
 
 Note the `./` in front of the file name. Alternatively, double-click the `.deb` file to open it in your software centre.
@@ -84,7 +84,7 @@ sudo apt remove artilody-sampleforge
 
 > Sound on Linux: Sampleforge plays audio through ALSA. On modern desktops ALSA is routed to PipeWire or PulseAudio automatically. If you get no sound, install the bridge package `pipewire-alsa` (PipeWire) or `libasound2-plugins` (PulseAudio) and restart the program.
 
-**Tarball:** unpack `artilody-sampleforge-0.2.0-linux-x86_64.tar.gz` and run `./artilody-sampleforge`. The libraries listed in the troubleshooting section must then be installed manually.
+**Tarball:** unpack `artilody-sampleforge-0.3.0-linux-x86_64.tar.gz` and run `./artilody-sampleforge`. The libraries listed in the troubleshooting section must then be installed manually.
 
 # Preparing a recording
 
@@ -119,6 +119,8 @@ The window adapts to the screen on start-up and can be resized freely (minimum 9
 ## 1. Import a recording
 
 Click **Import audio** and choose your file. Sampleforge reads the audio, detects onsets and measures the pitch of each sample in a background thread. The status line shows the progress. When the analysis is complete, the samples appear in the list, in the overview and on the keyboard (gold keys).
+
+**A series of files:** select several files in the import dialog (for example one file per note, or a chromatic recording split into parts). Sampleforge sorts them by the pitch of their first note; if any file has an uncertain pitch, natural filename order is used instead (`Note 2` before `Note 10`). The files are joined into one recording, and onsets are detected inside each file at that file's own level, so a sample never crosses a file boundary. All files must use the same sample rate; mono files are duplicated to stereo when the series contains stereo files. The 128 MB decoded-size limit applies to all files together. **Re-analyse** keeps the file boundaries.
 
 ## 2. Check the detection
 
@@ -181,10 +183,19 @@ The WAV files are 24-bit PCM, named in ascending order, for example `001_C1.wav`
 
 Load `Instrument.sfz` from inside an SFZ-capable sampler, for example sforzando (free, macOS/Windows), Sfizz (free, all platforms, including Linux), Decent Sampler with SFZ support, or the samplers in many DAWs. Always keep `Instrument.sfz` and the WAV files together in the same folder.
 
-Each sample becomes one SFZ region that plays only on its own key:
+The file follows the usual SFZ template: `<control>` (`default_path` is empty because the samples are beside the file), `<global>`, one `<group>` with `loop_mode=no_loop`, and one region per sample that plays only on its own key (comments omitted here):
 
 ```
-<region> lokey=24 hikey=24 pitch_keycenter=24 loop_mode=no_loop sample=001_C1.wav
+<control>
+default_path=
+
+<global>
+
+<group>
+loop_mode=no_loop
+
+<region> lokey=24 hikey=24 pitch_keycenter=24 sample=001_C1.wav
+<region> lokey=25 hikey=25 pitch_keycenter=25 sample=002_Csharp1.wav
 ```
 
 - Missing notes stay silent; Sampleforge does not create new samples for empty keys.
@@ -210,8 +221,10 @@ The format is described in detail in `INSTRUMENT-FORMAT.md` in the repository.
 | Windows: SmartScreen warning | Click **More info** and **Run anyway** |
 | Linux: no sound | Install `pipewire-alsa` or `libasound2-plugins`; check that no other program locks the sound card |
 | Linux: program does not start from the tarball | `sudo apt install libasound2 libfreetype6 libfontconfig1 libx11-6 libxext6 libxinerama1 libxrandr2 libxcursor1 libxrender1 libxcomposite1` |
-| "Cannot decode this audio file" | Convert the recording to WAV, AIFF or FLAC |
-| "Use mono/stereo audio up to 128 MB" | Shorten the recording or split it into several files |
+| "Cannot decode <file>" | Convert that file to WAV, AIFF or FLAC |
+| "<file>: use mono or stereo audio" | Mix that file down to mono or stereo |
+| "Use mono/stereo audio up to 128 MB" | Shorten the audio or select fewer files; the limit covers all selected files together |
+| "All files must use the same sample rate" | Convert the files in the series to one sample rate |
 | Notes are missed or too many are found | Adjust **Floor dB** and **Spacing s**, then **Re-analyse** |
 | The whole range is an octave off | Use **First note** or **Align range to this pitch** |
 

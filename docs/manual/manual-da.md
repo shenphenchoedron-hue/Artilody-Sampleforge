@@ -1,4 +1,4 @@
-% version: 0.2.0
+% version: 0.3.0
 % date: Oktober 2026
 % tagline: Gør kromatiske optagelser til stemte SFZ-instrumenter
 
@@ -11,7 +11,7 @@ Artilody Sampleforge gør én optagelse af et instrument til et spilbart samplei
 - viser manglende toner som huller på et klaviatur med 88 tangenter,
 - foreslår en finstemning til hvert sample, som du kan lytte til og godkende,
 - lader dig rette grænserne manuelt (trimme, dele, sammenlægge),
-- eksporterer et standard **SFZ 1.0**-instrument med **24-bit WAV**-samples, der virker i enhver SFZ-kompatibel sampler.
+- eksporterer et standard **SFZ**-instrument med **24-bit WAV**-samples, der virker i enhver SFZ-kompatibel sampler.
 
 Sampleforge er et selvstændigt program, ikke et plugin. Al behandling foregår lokalt på din computer; der kræves ingen netværksforbindelse efter installationen.
 
@@ -32,15 +32,15 @@ https://github.com/shenphenchoedron-hue/Artilody-Sampleforge/releases
 
 | Fil | System |
 |---|---|
-| `Artilody-Sampleforge-0.2.0-macOS.dmg` | macOS (Apple Silicon og Intel) |
-| `Artilody-Sampleforge-0.2.0-Windows-x64-Setup.exe` | Windows-installationsprogram |
-| `Artilody-Sampleforge-0.2.0-Windows-x64-Portable.zip` | Windows, uden installation |
-| `artilody-sampleforge_0.2.0_amd64.deb` | Debian-/Ubuntu-pakke |
-| `artilody-sampleforge-0.2.0-linux-x86_64.tar.gz` | Anden Linux, uden installation |
+| `Artilody-Sampleforge-0.3.0-macOS.dmg` | macOS (Apple Silicon og Intel) |
+| `Artilody-Sampleforge-0.3.0-Windows-x64-Setup.exe` | Windows-installationsprogram |
+| `Artilody-Sampleforge-0.3.0-Windows-x64-Portable.zip` | Windows, uden installation |
+| `artilody-sampleforge_0.3.0_amd64.deb` | Debian-/Ubuntu-pakke |
+| `artilody-sampleforge-0.3.0-linux-x86_64.tar.gz` | Anden Linux, uden installation |
 
 ## macOS
 
-1. Dobbeltklik på `Artilody-Sampleforge-0.2.0-macOS.dmg`.
+1. Dobbeltklik på `Artilody-Sampleforge-0.3.0-macOS.dmg`.
 2. Træk **Artilody Sampleforge** over i mappen **Programmer** (Applications) i vinduet, der åbner.
 3. Skub diskbilledet ud, og start programmet fra Programmer eller Launchpad.
 
@@ -54,14 +54,14 @@ xattr -dr com.apple.quarantine "/Applications/Artilody Sampleforge.app"
 
 ## Windows
 
-1. Dobbeltklik på `Artilody-Sampleforge-0.2.0-Windows-x64-Setup.exe`.
+1. Dobbeltklik på `Artilody-Sampleforge-0.3.0-Windows-x64-Setup.exe`.
 2. Hvis Windows SmartScreen viser "Windows beskyttede din pc", klik **Flere oplysninger** og derefter **Kør alligevel**. Installationsprogrammet er ikke kodesigneret med et betalt certifikat.
 3. Vælg sprog (dansk eller engelsk), acceptér GPL-licensen, og følg guiden. Du kan vælge at installere for alle brugere eller kun for dig selv, og om der skal oprettes en genvej på skrivebordet.
 4. Start **Artilody Sampleforge** fra Start-menuen. Manualerne ligger også i mappen i Start-menuen.
 
 Afinstallér via **Indstillinger > Apps > Installerede apps** eller afinstallationsgenvejen i Start-menuen.
 
-**Portabel udgave:** pak `Artilody-Sampleforge-0.2.0-Windows-x64-Portable.zip` ud et vilkårligt sted, og kør `Artilody Sampleforge.exe`. Der skrives intet i registreringsdatabasen.
+**Portabel udgave:** pak `Artilody-Sampleforge-0.3.0-Windows-x64-Portable.zip` ud et vilkårligt sted, og kør `Artilody Sampleforge.exe`. Der skrives intet i registreringsdatabasen.
 
 ## Debian og Ubuntu Linux
 
@@ -69,7 +69,7 @@ Installér pakken med apt, som automatisk installerer de nødvendige biblioteker
 
 ```
 cd ~/Overførsler
-sudo apt install ./artilody-sampleforge_0.2.0_amd64.deb
+sudo apt install ./artilody-sampleforge_0.3.0_amd64.deb
 ```
 
 Bemærk `./` foran filnavnet. Mappen kan hedde `~/Downloads` afhængigt af sprogindstillingen. Du kan også dobbeltklikke på `.deb`-filen for at åbne den i softwarecentret.
@@ -84,7 +84,7 @@ sudo apt remove artilody-sampleforge
 
 > Lyd på Linux: Sampleforge afspiller gennem ALSA. På moderne skriveborde sendes ALSA automatisk videre til PipeWire eller PulseAudio. Hvis der ikke kommer lyd, så installér broen `pipewire-alsa` (PipeWire) eller `libasound2-plugins` (PulseAudio), og genstart programmet.
 
-**Tarball:** pak `artilody-sampleforge-0.2.0-linux-x86_64.tar.gz` ud, og kør `./artilody-sampleforge`. Bibliotekerne fra afsnittet om fejlfinding skal så installeres manuelt.
+**Tarball:** pak `artilody-sampleforge-0.3.0-linux-x86_64.tar.gz` ud, og kør `./artilody-sampleforge`. Bibliotekerne fra afsnittet om fejlfinding skal så installeres manuelt.
 
 # Forbered en optagelse
 
@@ -119,6 +119,8 @@ Programmets knapper og felter er på engelsk; manualen bruger de engelske navne.
 ## 1. Indlæs en optagelse
 
 Klik **Import audio**, og vælg din fil. Sampleforge læser lyden, finder anslag og måler tonehøjden på hvert sample i en baggrundstråd. Statuslinjen viser fremdriften. Når analysen er færdig, vises samples i listen, i oversigten og på klaviaturet (gyldne tangenter).
+
+**En serie filer:** vælg flere filer i importdialogen (fx én fil pr. tone eller en kromatisk optagelse delt i flere dele). Sampleforge sorterer dem efter tonehøjden på deres første tone; hvis en fil har usikker tonehøjde, bruges naturlig filnavnsrækkefølge i stedet (`Tone 2` før `Tone 10`). Filerne samles til én optagelse, og anslag findes inden for hver fil ud fra filens eget niveau, så et sample aldrig krydser en filgrænse. Alle filer skal have samme samplerate; monofiler dubleres til stereo, når serien indeholder stereofiler. Grænsen på 128 MB afkodet lyd gælder for alle filer tilsammen. **Re-analyse** bevarer filgrænserne.
 
 ## 2. Kontrollér opdelingen
 
@@ -181,10 +183,19 @@ WAV-filerne er 24-bit PCM og nummereres i stigende rækkefølge, fx `001_C1.wav`
 
 Indlæs `Instrument.sfz` inde fra en SFZ-kompatibel sampler, fx sforzando (gratis, macOS/Windows), Sfizz (gratis, alle platforme inkl. Linux), Decent Sampler med SFZ-understøttelse eller samplerne i mange DAW'er. Hold altid `Instrument.sfz` og WAV-filerne samlet i samme mappe.
 
-Hvert sample bliver én SFZ-region, der kun spiller på sin egen tangent:
+Filen følger den almindelige SFZ-skabelon: `<control>` (`default_path` er tom, fordi samples ligger ved siden af filen), `<global>`, én `<group>` med `loop_mode=no_loop` og én region pr. sample, der kun spiller på sin egen tangent (kommentarer udeladt her):
 
 ```
-<region> lokey=24 hikey=24 pitch_keycenter=24 loop_mode=no_loop sample=001_C1.wav
+<control>
+default_path=
+
+<global>
+
+<group>
+loop_mode=no_loop
+
+<region> lokey=24 hikey=24 pitch_keycenter=24 sample=001_C1.wav
+<region> lokey=25 hikey=25 pitch_keycenter=25 sample=002_Csharp1.wav
 ```
 
 - Manglende toner forbliver tavse; Sampleforge laver ikke nye samples til tomme tangenter.
@@ -210,8 +221,10 @@ Formatet er beskrevet detaljeret i `INSTRUMENT-FORMAT.md` i repositoriet.
 | Windows: SmartScreen-advarsel | Klik **Flere oplysninger** og **Kør alligevel** |
 | Linux: ingen lyd | Installér `pipewire-alsa` eller `libasound2-plugins`; kontrollér, at intet andet program låser lydkortet |
 | Linux: programmet starter ikke fra tarball | `sudo apt install libasound2 libfreetype6 libfontconfig1 libx11-6 libxext6 libxinerama1 libxrandr2 libxcursor1 libxrender1 libxcomposite1` |
-| "Cannot decode this audio file" | Konvertér optagelsen til WAV, AIFF eller FLAC |
-| "Use mono/stereo audio up to 128 MB" | Gør optagelsen kortere, eller del den i flere filer |
+| "Cannot decode <fil>" | Konvertér den fil til WAV, AIFF eller FLAC |
+| "<fil>: use mono or stereo audio" | Mix filen ned til mono eller stereo |
+| "Use mono/stereo audio up to 128 MB" | Gør lyden kortere, eller vælg færre filer; grænsen gælder alle valgte filer tilsammen |
+| "All files must use the same sample rate" | Konvertér filerne i serien til samme samplerate |
 | Toner overses, eller der findes for mange | Justér **Floor dB** og **Spacing s**, og klik **Re-analyse** |
 | Hele rækken ligger en oktav forkert | Brug **First note** eller **Align range to this pitch** |
 

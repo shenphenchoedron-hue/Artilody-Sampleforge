@@ -1,13 +1,18 @@
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <exception>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <numeric>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 namespace forge {
 constexpr double pi = 3.14159265358979323846;
@@ -26,6 +31,10 @@ struct Recording {
   std::vector<Sample> samples;
   int first = 21;
   int analysisChannel = 0;
+  // Start frame of every imported file when a series of files is combined
+  // into one recording. Empty (or a single entry) for a single recording.
+  // Notes are then detected per file, so no note crosses a file boundary.
+  std::vector<int> segments;
 };
 inline double frequency(int midi, double reference = 440) {
   return reference * std::pow(2.0, (midi - 69) / 12.0);
@@ -87,7 +96,7 @@ inline Pitch yin(const std::vector<float> &x, double rate) {
          lag = found + (std::abs(den) > 0.0 ? .5 * (a - c) / den : 0);
   return {rate / lag, 1 - b};
 }
-inline Pitch pitch(const std::vector<float> &x, double sr, int start, int end) {
+inline Pitch pitch(std::span<const float> x, double sr, int start, int end) {
   int step = std::max(1, int(sr / 12000));
   double rate = sr / step;
   std::vector<Pitch> values;
@@ -126,7 +135,44 @@ inline Pitch pitch(const std::vector<float> &x, double sr, int start, int end) {
   p.confidence *= double(agree) / values.size();
   return p;
 }
-inline std::vector<Sample> detect(const std::vector<float> &x, double sr,
+// Runs fn(0) ... fn(n - 1) spread over the CPU cores. fn must be safe to call
+// concurrently for different indices. After all workers have stopped, the
+// first exception thrown by fn is rethrown; remaining indices are skipped.
+inline void parallelFor(int n, const std::function<void(int)> &fn) {
+  if (n <= 0)
+    return;
+  int workers = std::min(n, int(std::max(1u, std::thread::hardware_concurrency())));
+  std::atomic<int> next{0};
+  std::atomic<bool> failed{false};
+  std::exception_ptr error;
+  std::mutex errorLock;
+  auto run = [&] {
+    for (int i; !failed && (i = next++) < n;) {
+      try {
+        fn(i);
+      } catch (...) {
+        std::lock_guard<std::mutex> lock(errorLock);
+        if (!error)
+          error = std::current_exception();
+        failed = true;
+      }
+    }
+  };
+  std::vector<std::thread> pool;
+  for (int t = 1; t < workers; ++t) {
+    try {
+      pool.emplace_back(run);
+    } catch (...) {
+      break; // Could not start another thread: continue with fewer.
+    }
+  }
+  run();
+  for (auto &t : pool)
+    t.join();
+  if (error)
+    std::rethrow_exception(error);
+}
+inline std::vector<Sample> detect(std::span<const float> x, double sr,
                                   double db = -42, double gap = .18) {
   int hop = std::max(1, int(std::lround(sr * .005)));
   std::vector<double> env;
@@ -236,6 +282,21 @@ inline void mapNotes(std::vector<Sample> &samples, int first,
     ++expected;
   }
 }
+// Onsets within one file of a series, detected at that file's own level so a
+// quiet file is not lost next to a loud one. A file in which no onset is
+// found (but which is not silent) becomes one whole sample.
+inline std::vector<Sample> detectSegment(std::span<const float> x, double rate,
+                                         double threshold, double gap) {
+  if (double(x.size()) < rate * .04)
+    return {};
+  auto found = detect(x, rate, threshold, gap);
+  if (found.empty() && std::any_of(x.begin(), x.end(), [](float v) {
+        return std::abs(v) > 1e-5f;
+      }))
+    found.push_back({0, int(x.size()), 0, {}, false});
+  return found;
+}
+// progress (if set) may be called from worker threads.
 inline void analyse(Recording &r, double threshold, double gap,
                     double reference,
                     std::function<void(int, int)> progress = {}) {
@@ -254,18 +315,149 @@ inline void analyse(Recording &r, double threshold, double gap,
     }
   }
   const auto &x = r.channels[static_cast<std::size_t>(r.analysisChannel)];
-  r.samples = detect(x, r.rate, threshold, gap);
+  if (r.segments.size() > 1) {
+    // A series of files: detect onsets within each file at its own level.
+    r.samples.clear();
+    for (std::size_t k = 0; k < r.segments.size(); ++k) {
+      int a = std::clamp(r.segments[k], 0, int(x.size())),
+          b = k + 1 < r.segments.size()
+                  ? std::clamp(r.segments[k + 1], a, int(x.size()))
+                  : int(x.size());
+      for (auto s : detectSegment(std::span<const float>(x).subspan(
+                                      static_cast<std::size_t>(a),
+                                      static_cast<std::size_t>(b - a)),
+                                  r.rate, threshold, gap)) {
+        s.start += a;
+        s.end += a;
+        r.samples.push_back(s);
+      }
+    }
+  } else {
+    r.samples = detect(x, r.rate, threshold, gap);
+  }
   if (r.samples.size() > 128)
     throw std::runtime_error(
         "More than 128 attacks. Increase minimum spacing or detection floor.");
-  for (int i = 0; i < int(r.samples.size()); ++i) {
+  std::atomic<int> done{0};
+  const int total = int(r.samples.size());
+  parallelFor(total, [&](int i) {
     auto &s = r.samples[static_cast<std::size_t>(i)];
     s.pitch = pitch(x, r.rate, s.start, s.end);
     if (progress)
-      progress(i + 1, int(r.samples.size()));
+      progress(++done, total);
+  });
+  r.first = inferFirst(r.samples, reference, r.first);
+  mapNotes(r.samples, r.first, reference);
+}
+// Order in which a series of files is combined, given the lead pitch of each
+// file in its current (filename) order. Ascending pitch when every file has a
+// reliable first note; otherwise the current order is kept. Returns whether
+// pitch order was used.
+inline bool seriesOrder(const std::vector<Pitch> &lead,
+                        std::vector<std::size_t> &order) {
+  order.resize(lead.size());
+  std::iota(order.begin(), order.end(), std::size_t(0));
+  bool reliable = std::all_of(lead.begin(), lead.end(), [](const Pitch &p) {
+    return p.hz > 0 && p.confidence >= .8;
+  });
+  if (reliable)
+    std::stable_sort(order.begin(), order.end(),
+                     [&](std::size_t a, std::size_t b) {
+                       return lead[a].hz < lead[b].hz;
+                     });
+  return reliable;
+}
+// Appends one file to a recording built from a series of files and records
+// where it starts. Mono files are duplicated when the series has stereo files.
+inline void appendSegment(Recording &r,
+                          const std::vector<std::vector<float>> &channels,
+                          std::size_t channelCount) {
+  if (channels.empty() || channelCount < channels.size())
+    throw std::runtime_error("Invalid channel layout");
+  if (r.channels.empty())
+    r.channels.resize(channelCount);
+  if (r.channels.size() != channelCount)
+    throw std::runtime_error("Invalid channel layout");
+  r.segments.push_back(int(r.channels[0].size()));
+  for (std::size_t ch = 0; ch < channelCount; ++ch) {
+    const auto &src = channels[std::min(ch, channels.size() - 1)];
+    r.channels[ch].insert(r.channels[ch].end(), src.begin(), src.end());
+  }
+}
+// Combines a series of decoded files into r (r.rate must be set) and analyses
+// it, giving the same result as appending the files and calling analyse(),
+// but every note is measured only once: the pitch of each file's first note
+// also decides the order (seriesOrder). Files are released as they are
+// appended. Returns the order used; pitchOrder tells whether it is by pitch.
+// progress (if set) may be called from worker threads.
+inline std::vector<std::size_t>
+buildSeries(Recording &r, std::vector<std::vector<std::vector<float>>> &files,
+            double threshold, double gap, double reference, bool &pitchOrder,
+            const std::function<void(int, int)> &progress = {}) {
+  std::size_t channelCount = 1, frames = 0;
+  for (const auto &f : files) {
+    if (f.empty() || f[0].empty())
+      throw std::runtime_error("Empty file in series");
+    channelCount = std::max(channelCount, f.size());
+    frames += f[0].size();
+  }
+  // Same rule as analyse(): the channel with the most energy overall.
+  std::vector<double> energy(channelCount);
+  for (const auto &f : files)
+    for (std::size_t ch = 0; ch < channelCount; ++ch) {
+      const auto &x = f[std::min(ch, f.size() - 1)];
+      for (std::size_t i = 0; i < x.size(); i += 32)
+        energy[ch] += double(x[i]) * x[i];
+    }
+  r.analysisChannel = int(std::max_element(energy.begin(), energy.end()) -
+                          energy.begin());
+  auto channel = [&](std::size_t k) -> const std::vector<float> & {
+    const auto &f = files[k];
+    return f[std::min(std::size_t(r.analysisChannel), f.size() - 1)];
+  };
+  std::vector<std::vector<Sample>> local(files.size());
+  std::vector<std::pair<std::size_t, std::size_t>> jobs;
+  for (std::size_t k = 0; k < files.size(); ++k) {
+    local[k] = detectSegment(channel(k), r.rate, threshold, gap);
+    for (std::size_t i = 0; i < local[k].size(); ++i)
+      jobs.emplace_back(k, i);
+  }
+  if (jobs.size() > 128)
+    throw std::runtime_error(
+        "More than 128 attacks. Increase minimum spacing or detection floor.");
+  std::atomic<int> done{0};
+  const int total = int(jobs.size());
+  parallelFor(total, [&](int j) {
+    auto [k, i] = jobs[static_cast<std::size_t>(j)];
+    auto &s = local[k][i];
+    s.pitch = pitch(channel(k), r.rate, s.start, s.end);
+    if (progress)
+      progress(++done, total);
+  });
+  std::vector<Pitch> lead;
+  for (const auto &found : local)
+    lead.push_back(found.empty() ? Pitch{} : found[0].pitch);
+  std::vector<std::size_t> order;
+  pitchOrder = seriesOrder(lead, order);
+  r.channels.assign(channelCount, {});
+  for (auto &ch : r.channels)
+    ch.reserve(frames);
+  r.segments.clear();
+  r.samples.clear();
+  for (auto k : order) {
+    int base = int(r.channels[0].size());
+    appendSegment(r, files[k], channelCount);
+    files[k].clear();
+    files[k].shrink_to_fit();
+    for (auto s : local[k]) {
+      s.start += base;
+      s.end += base;
+      r.samples.push_back(s);
+    }
   }
   r.first = inferFirst(r.samples, reference, r.first);
   mapNotes(r.samples, r.first, reference);
+  return order;
 }
 inline void fft(std::vector<std::complex<double>> &a, bool inverse = false) {
   size_t n = a.size();
